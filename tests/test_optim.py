@@ -19,13 +19,15 @@ def test_adam_two_steps_matches_reference_equations():
     opt = Adam(learning_rate=0.05, beta1=0.9, beta2=0.999, eps=1e-8)
     params = np.array([0.3, -0.4])
     grads = [np.array([0.2, -0.1]), np.array([0.4, 0.3])]
-    ref_m = np.zeros(2); ref_v = np.zeros(2); ref_params = params.copy()
+    ref_m = np.zeros(2)
+    ref_v = np.zeros(2)
+    ref_params = params.copy()
     for t, grad in enumerate(grads, start=1):
-        ref_m = 0.9*ref_m + 0.1*grad
-        ref_v = 0.999*ref_v + 0.001*(grad*grad)
-        m_hat = ref_m/(1-0.9**t)
-        v_hat = ref_v/(1-0.999**t)
-        ref_params = ref_params - 0.05*m_hat/(np.sqrt(v_hat)+1e-8)
+        ref_m = 0.9 * ref_m + 0.1 * grad
+        ref_v = 0.999 * ref_v + 0.001 * (grad * grad)
+        m_hat = ref_m / (1 - 0.9**t)
+        v_hat = ref_v / (1 - 0.999**t)
+        ref_params = ref_params - 0.05 * m_hat / (np.sqrt(v_hat) + 1e-8)
         params = opt.step(params, grad)
     np.testing.assert_allclose(params, ref_params, atol=1e-12)
 

@@ -314,7 +314,9 @@ class Trainer:
         if self._array_digest(self.model.params) != self._fit_params_digest:
             raise ValueError("model parameters changed after fit(); saved history would be stale")
         if self.model.architecture() != self._fit_architecture:
-            raise ValueError("model architecture changed after fit(); saved provenance would be stale")
+            raise ValueError(
+                "model architecture changed after fit(); saved provenance would be stale"
+            )
         if self._history_digest(self.history) != self._fit_history_digest:
             raise ValueError("training history changed after fit(); saved metrics would be stale")
 

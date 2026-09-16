@@ -45,12 +45,14 @@ def test_parameter_shift_gradient_matches_finite_difference_bce_loss_multilayer(
     numeric = np.zeros_like(model.params)
     base = model.params.copy()
     for idx in np.ndindex(base.shape):
-        plus = base.copy(); plus[idx] += h
-        minus = base.copy(); minus[idx] -= h
+        plus = base.copy()
+        plus[idx] += h
+        minus = base.copy()
+        minus[idx] -= h
         numeric[idx] = (
             binary_cross_entropy(model.predict_proba(X, plus), y)
             - binary_cross_entropy(model.predict_proba(X, minus), y)
-        ) / (2*h)
+        ) / (2 * h)
     np.testing.assert_allclose(analytic, numeric, atol=2e-5, rtol=2e-5)
 
 

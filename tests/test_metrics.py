@@ -23,9 +23,13 @@ def test_bce_derivative_matches_central_difference_interior():
     h = 1e-7
     numeric = np.zeros_like(p)
     for i in range(len(p)):
-        plus = p.copy(); plus[i] += h
-        minus = p.copy(); minus[i] -= h
-        numeric[i] = (binary_cross_entropy(plus, y) - binary_cross_entropy(minus, y)) / (2*h)
+        plus = p.copy()
+        plus[i] += h
+        minus = p.copy()
+        minus[i] -= h
+        numeric[i] = (
+            binary_cross_entropy(plus, y) - binary_cross_entropy(minus, y)
+        ) / (2 * h)
     np.testing.assert_allclose(analytic, numeric, rtol=2e-6, atol=2e-6)
 
 
