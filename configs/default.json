@@ -6,9 +6,13 @@
   "noise": 0.08,
   "num_qubits": 2,
   "num_layers": 2,
+  "num_features": 2,
+  "observable_wire": 1,
+  "init_scale": 0.25,
   "epochs": 35,
   "learning_rate": 0.12,
   "batch_size": 0,
+  "grad_clip": 2.0,
   "output_dir": "outputs/default_run",
   "log_every": 5
 }

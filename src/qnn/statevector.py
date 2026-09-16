@@ -1,9 +1,9 @@
-"""Small, readable statevector simulator.
+"""Small, explicit statevector simulator.
 
 Qubit convention
 ----------------
-Qubit 0 is the most significant bit. For two qubits, the basis order is:
-|00>, |01>, |10>, |11>.
+Qubit 0 is the most-significant bit. For two qubits the basis order is
+``|00>, |01>, |10>, |11>``.
 """
 
 from __future__ import annotations
@@ -12,45 +12,48 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from qnn._validation import integer_scalar, numeric_array
 from qnn.gates import ComplexArray, Z
 
 
 @dataclass(frozen=True)
 class StateVectorSimulator:
-    """Minimal n-qubit statevector simulator.
-
-    The class is intentionally immutable and stateless. Methods accept and
-    return explicit state arrays so QNN forward passes are easy to test and
-    reason about.
-    """
+    """Minimal n-qubit statevector simulator with explicit state arrays."""
 
     num_qubits: int
 
     def __post_init__(self) -> None:
-        """Validate constructor arguments after dataclass initialization."""
-        if self.num_qubits < 1:
-            raise ValueError("num_qubits must be at least 1")
+        object.__setattr__(
+            self, "num_qubits", integer_scalar("num_qubits", self.num_qubits, minimum=1)
+        )
 
     @property
     def dimension(self) -> int:
-        """Return the Hilbert-space dimension for ``num_qubits``."""
-        return int(2**self.num_qubits)
+        """Hilbert-space dimension ``2**num_qubits``."""
+        return 1 << int(self.num_qubits)
 
     def zero_state(self) -> ComplexArray:
-        """Return the computational basis ground state ``|00...0>``."""
+        """Return ``|00...0>``."""
         state = np.zeros(self.dimension, dtype=np.complex128)
         state[0] = 1.0 + 0.0j
         return state
 
     def apply_one_qubit_gate(
-        self, state: ComplexArray, gate: ComplexArray, wire: int
+        self,
+        state: ComplexArray,
+        gate: ComplexArray,
+        wire: int,
     ) -> ComplexArray:
-        """Apply a 2x2 gate to one wire."""
+        """Apply a finite unitary 2x2 matrix to one wire."""
         self._validate_wire(wire)
+        state = self._validate_state(state)
+        gate = numeric_array("gate", gate)
         if gate.shape != (2, 2):
             raise ValueError(f"Expected a 2x2 gate, got shape {gate.shape}")
-        if state.shape != (self.dimension,):
-            raise ValueError(f"Expected state shape {(self.dimension,)}, got {state.shape}")
+        if not np.all(np.isfinite(gate)):
+            raise ValueError("gate must contain only finite values")
+        if not np.allclose(gate.conj().T @ gate, np.eye(2), atol=1e-12, rtol=1e-12):
+            raise ValueError("gate must be unitary")
 
         tensor = state.reshape([2] * self.num_qubits)
         tensor = np.moveaxis(tensor, wire, 0)
@@ -62,28 +65,37 @@ class StateVectorSimulator:
         return np.asarray(updated.reshape(self.dimension), dtype=np.complex128)
 
     def apply_cnot(self, state: ComplexArray, control: int, target: int) -> ComplexArray:
-        """Apply a controlled-X gate."""
+        """Apply CNOT with the supplied control and target wires."""
         self._validate_wire(control)
         self._validate_wire(target)
         if control == target:
             raise ValueError("control and target must be different wires")
-        if state.shape != (self.dimension,):
-            raise ValueError(f"Expected state shape {(self.dimension,)}, got {state.shape}")
+        state = self._validate_state(state)
 
-        updated = np.zeros_like(state)
-        for basis_index, amplitude in enumerate(state):
-            if amplitude == 0:
-                continue
-            bits = self._index_to_bits(basis_index)
-            if bits[control] == 1:
-                bits[target] ^= 1
-            updated[self._bits_to_index(bits)] += amplitude
-        return updated
+        # In the tensor view, axis ``q`` is qubit ``q`` because wire 0 is
+        # the most-significant bit. Move control/target to the first two
+        # axes, swap target slices only inside the control=1 sector, then
+        # restore the original axis order. This is O(2**n) and avoids the
+        # O(n) bit-list conversion previously done for every basis state.
+        tensor = state.reshape([2] * self.num_qubits)
+        moved = np.moveaxis(tensor, (int(control), int(target)), (0, 1))
+        updated = moved.copy()
+        updated[1, 0, ...] = moved[1, 1, ...]
+        updated[1, 1, ...] = moved[1, 0, ...]
+        restored = np.moveaxis(updated, (0, 1), (int(control), int(target)))
+        return np.asarray(restored.reshape(self.dimension), dtype=np.complex128)
 
     def apply_ring_entanglement(self, state: ComplexArray) -> ComplexArray:
-        """Apply a nearest-neighbor CNOT chain with a closing ring when possible."""
+        """Apply the project's directed CNOT neighbor pattern.
+
+        For two qubits the only neighbor pair is ``0 -> 1``. For three or
+        more qubits, the chain ``0 -> 1 -> ... -> n-1`` is closed with
+        ``n-1 -> 0``.
+        """
+        state = self._validate_state(state)
         if self.num_qubits == 1:
-            return state
+            return state.copy()
+
         updated = state
         for control in range(self.num_qubits - 1):
             updated = self.apply_cnot(updated, control=control, target=control + 1)
@@ -92,29 +104,49 @@ class StateVectorSimulator:
         return updated
 
     def expectation_z(self, state: ComplexArray, wire: int) -> float:
-        """Return <Z_wire>."""
+        """Return ``<Z_wire>`` for a normalized state."""
         self._validate_wire(wire)
+        state = self._validate_state(state, require_normalized=True)
         z_state = self.apply_one_qubit_gate(state, Z, wire)
-        return float(np.real(np.vdot(state, z_state)))
+        value = float(np.real(np.vdot(state, z_state)))
+        if value < -1.0 - 1e-12 or value > 1.0 + 1e-12:
+            raise FloatingPointError(f"invalid Pauli-Z expectation {value}")
+        return float(np.clip(value, -1.0, 1.0))
 
     def probabilities(self, state: ComplexArray) -> np.ndarray:
-        """Return computational-basis probabilities."""
-        probs = np.abs(state) ** 2
-        normalized = probs / probs.sum()
-        return np.asarray(normalized, dtype=np.float64)
+        """Return computational-basis Born probabilities."""
+        state = self._validate_state(state, require_normalized=True)
+        return np.asarray(np.abs(state) ** 2, dtype=np.float64)
+
+    def probability_one(self, state: ComplexArray, wire: int) -> float:
+        """Return the Born probability of measuring ``1`` on ``wire``."""
+        self._validate_wire(wire)
+        probs = self.probabilities(state)
+        total = 0.0
+        for basis_index, probability in enumerate(probs):
+            bit = (basis_index >> (self.num_qubits - 1 - wire)) & 1
+            if bit == 1:
+                total += float(probability)
+        return total
+
+    def _validate_state(
+        self,
+        state: ComplexArray,
+        *,
+        require_normalized: bool = False,
+    ) -> ComplexArray:
+        state = numeric_array("state", state)
+        if state.shape != (self.dimension,):
+            raise ValueError(f"Expected state shape {(self.dimension,)}, got {state.shape}")
+        if not np.all(np.isfinite(state)):
+            raise ValueError("state must contain only finite amplitudes")
+        if require_normalized:
+            norm_sq = float(np.real(np.vdot(state, state)))
+            if not np.isclose(norm_sq, 1.0, atol=1e-10, rtol=1e-10):
+                raise ValueError(f"state must be normalized, got squared norm {norm_sq}")
+        return state
 
     def _validate_wire(self, wire: int) -> None:
-        """Raise ``ValueError`` if ``wire`` is outside the valid range."""
+        wire = integer_scalar("wire", wire, minimum=0)
         if not 0 <= wire < self.num_qubits:
             raise ValueError(f"wire must be in [0, {self.num_qubits - 1}], got {wire}")
-
-    def _index_to_bits(self, index: int) -> list[int]:
-        """Convert a basis-state index to its big-endian bit representation."""
-        return [(index >> (self.num_qubits - 1 - i)) & 1 for i in range(self.num_qubits)]
-
-    def _bits_to_index(self, bits: list[int]) -> int:
-        """Convert a big-endian list of bits back to a basis-state index."""
-        index = 0
-        for bit in bits:
-            index = (index << 1) | int(bit)
-        return index

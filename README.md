@@ -1,138 +1,289 @@
-<h1 align="center">
-QNN From Scratch
-</h1>
-<h3 align="center">
-A NumPy-only implementation of a data-reuploading Quantum Neural Network (QNN) for binary classification.
-</h3>
+<h1 align="center">QNN From Scratch</h1>
+<h3 align="center">A transparent data-reuploading quantum neural network with a NumPy statevector core.</h3>
 
 ---
-
-<div align="center">
-
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-fcbc2c.svg?logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![Test Linux](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/ubuntu.yml/badge.svg)](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/ubuntu.yml?query=branch%3Amain)
-[![Test Windows](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/windows.yml/badge.svg)](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/windows.yml?query=branch%3Amain)
-[![Test MacOS](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/macos.yml/badge.svg)](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/macos.yml?query=branch%3Amain)
-[![Lints](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/lint.yml/badge.svg)](https://github.com/neuralsorcerer/qnn-from-scratch/actions/workflows/lint.yml?query=branch%3Amain)
-[![License](https://img.shields.io/badge/License-MIT-3c60b1.svg?logo=opensourceinitiative&logoColor=white)](./LICENSE)
-
-</div>
 
 > [!NOTE]
-> This repository is for learning and experimentation only. It is not intended for production decisions or claims of quantum advantage.
+> This repository is an educational exact-statevector implementation. It does not claim quantum advantage, hardware realism, or benchmark superiority over classical models.
 
----
+## What this project implements
 
-## Why this project exists
+The quantum core is implemented directly with NumPy. Matplotlib is used only for optional plots. The project contains:
 
-Most QNN tutorials hide critical internals behind framework abstractions. This repository is built to show every moving part and the reason for each design choice:
+- exact statevector simulation in $\mathbb{C}^{2^n}$,
+- explicit $R_X$, $R_Y$, $R_Z$, Hadamard, Pauli, and CNOT operations,
+- repeated classical angle encoding,
+- a project-specific CNOT entangling pattern,
+- a single-qubit Pauli-$Z$ readout mapped to a binary probability,
+- epsilon-stabilized Bernoulli negative log-likelihood training,
+- analytic two-term parameter-shift derivatives for each trainable Pauli rotation,
+- Adam and SGD implemented with NumPy,
+- deterministic toy datasets, CLI utilities, plotting, tests, and saved experiment metadata.
 
-1. **Statevector simulation** in $\mathbb{C}^{2^n}$ so you can inspect exact amplitudes (no sampling noise).
-2. **Explicit unitaries** so gate-level math maps directly to code.
-3. **Variational ansatz** so trainable parameters are physically interpretable as rotation angles.
-4. **Expectation measurement** so model outputs come from quantum observables.
-5. **Cross-entropy loss** so training aligns with probabilistic binary classification.
-6. **Parameter-shift gradients** because conventional backprop through quantum gates is not directly available in this setup.
-7. **Adam optimization** for stable first-order updates on noisy/non-convex loss surfaces.
+The design is inspired by quantum data re-uploading, but it is **not an exact reproduction** of the circuit in Pérez-Salinas et al. The two-qubit entangling example in that paper uses CZ gates, while this repository deliberately uses a CNOT neighbor pattern.
 
----
-
-## What we use and why
-
-- **NumPy**: deterministic linear algebra and transparent tensor operations.
-- **Statevector model**: exact expectations $\langle Z \rangle$ without shot variance, ideal for pedagogy.
-- **$R_X, R_Y, R_Z$ gates**: minimal universal-style rotation primitives for expressive single-qubit transformations.
-- **CNOT ring entanglement**: low-complexity pattern that still couples qubit subspaces.
-- **Data re-uploading**: repeatedly injects classical features, increasing representational capacity with shallow qubit counts.
-- **Binary cross-entropy (BCE)**: principled objective for Bernoulli likelihood.
-- **Parameter-shift rule**: exact gradient estimator for Pauli-generated rotations.
-- **Adam**: adaptive per-parameter step sizes to improve convergence behavior.
-
----
-
-## Quickstart
+## Installation
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
-python -m pip install -e .[dev]
+python -m pip install -e '.[dev]'
 ```
 
-Run tests:
+Run the tests:
 
 ```bash
 python -m pytest -q
 ```
 
-Train:
+Run the built-in default experiment:
 
 ```bash
-qnn train --config configs/default.json
+qnn train
 ```
 
-Predict:
+The repository also keeps the same defaults explicitly in `configs/default.json`, so the configuration can be inspected, versioned, and passed with `--config` when desired.
 
-```bash
-qnn predict --params outputs/default_run/trained_params.npy --x0 0.2 --x1 0.8 --num-qubits 2 --num-layers 2
-```
-
----
-
-## CLI usage
-
-### `qnn train`
-
-```bash
-qnn train \
-  --config configs/default.json \
-  --output-dir outputs/experiment_a \
-  --epochs 50 \
-  --learning-rate 0.08 \
-  --no-plots
-```
-
-- `--config`: base experiment configuration.
-- `--output-dir`: artifact destination override.
-- `--epochs`: optimization horizon override.
-- `--learning-rate`: Adam step size override.
-- `--no-plots`: skips plotting for faster runs.
-
-### `qnn predict`
+Predict from the saved parameter tensor:
 
 ```bash
 qnn predict \
   --params outputs/default_run/trained_params.npy \
   --x0 0.2 \
-  --x1 0.8 \
-  --num-qubits 2 \
-  --num-layers 2
+  --x1 0.8
 ```
 
-`--num-qubits` and `--num-layers` must match the training architecture used to produce the parameter file.
+The prediction command infers the number of layers and qubits from the tensor shape. If a sibling `config.json` exists, it also reads the saved measurement-wire metadata.
 
----
+## Circuit definition
 
-## Configuration reference
+For an input vector $x\in\mathbb{R}^d$, layer $\ell$, and wire $q$, the current ansatz applies:
 
-| Key | Type | Why it matters |
-|---|---|---|
-| `seed` | `int` | Controls deterministic RNG across dataset/model/training shuffle. |
-| `num_samples` | `int` | Trades off generalization estimate quality vs runtime. |
-| `test_size` | `float` | Sets holdout ratio, requires $0<test\_{size}<1$. |
-| `dataset` | `str` | Selects decision-boundary family (`linear`, `vertical`, `horizontal`, `circle`, `sine`). |
-| `noise` | `float` | Injects label ambiguity to control task difficulty. |
-| `num_qubits` | `int` | Sets Hilbert size $2^n$ (cost grows exponentially in $n$). |
-| `num_layers` | `int` | Increases capacity and parameter count $(L,n,3)$. |
-| `epochs` | `int` | More optimization steps; higher runtime. |
-| `learning_rate` | `float` | Directly scales Adam update magnitude. |
-| `batch_size` | `int` | `0` means full-batch; mini-batch may reduce per-step cost. |
-| `output_dir` | `str` | Governs reproducible artifact placement. |
-| `log_every` | `int` | Controls monitoring cadence. |
+1. $R_X(x_{q \bmod d})$
+2. $R_Y(x_{(q+1) \bmod d})$
+3. $R_Y(\theta_{\ell,q,0})$
+4. $R_Z(\theta_{\ell,q,1})$
+5. the CNOT neighbor pattern
+6. $R_Y(\theta_{\ell,q,2})$
 
----
+For two qubits the entangler is one CNOT, $0\rightarrow1$. For three or more qubits it is
 
-## Artifacts and outputs
+$$
+0\rightarrow1,\;1\rightarrow2,\ldots,(n-2)\rightarrow(n-1),\;(n-1)\rightarrow0.
+$$
+
+This is a directed sequence of gates, not a claim that all ring constructions are equivalent.
+
+The model has
+
+$$
+P = 3Ln
+$$
+
+trainable scalar parameters for $L$ layers and $n$ qubits.
+
+### Feature-coverage constraint
+
+The implemented cyclic encoder uses feature indices generated by $q$ and $q+1$. To avoid silently accepting an input dimension that the circuit never uses, the model requires
+
+$$
+d \le n+1.
+$$
+
+The built-in CLI dataset is two-dimensional, so its experiment configuration requires `num_features = 2`.
+
+## Statevector convention
+
+Qubit 0 is the most-significant bit. For two qubits the basis ordering is
+
+$$
+|00\rangle, |01\rangle, |10\rangle, |11\rangle.
+$$
+
+For a normalized state
+
+$$
+|\psi\rangle=\sum_{k=0}^{2^n-1} a_k|k\rangle,
+\qquad
+\sum_k|a_k|^2=1,
+$$
+
+the simulator returns computational-basis probabilities $|a_k|^2$ directly. It does not silently renormalize invalid states.
+
+## Rotation gates
+
+The trainable rotations use the standard convention
+
+$$
+R_P(\theta)=e^{-i\theta P/2}, \qquad P\in\{X,Y,Z\}.
+$$
+
+For example,
+
+$$
+R_Y(\theta)=
+\begin{bmatrix}
+\cos(\theta/2) & -\sin(\theta/2)\\
+\sin(\theta/2) & \cos(\theta/2)
+\end{bmatrix}.
+$$
+
+The simulator checks that matrices passed to its one-qubit gate routine are finite and unitary.
+
+## Measurement and binary probability
+
+The model measures Pauli $Z$ on one configured wire $w$:
+
+$$
+z(x;\theta)=\langle\psi(x;\theta)|Z_w|\psi(x;\theta)\rangle.
+$$
+
+For a normalized quantum state, $z\in[-1,1]$. The probability assigned to class 1 is
+
+$$
+p(x;\theta)=\frac{1-z(x;\theta)}{2}.
+$$
+
+This is exactly the Born probability of measuring `1` on wire $w$.
+
+## Loss and numerical stabilization
+
+The project uses mean Bernoulli negative log-likelihood. To keep the loss finite at exact probabilities 0 and 1 without creating an inconsistent derivative through a hard clipping operation, the implementation first applies the smooth affine map
+
+$$
+\tilde p=\varepsilon+(1-2\varepsilon)p,
+\qquad 0<\varepsilon<\frac12,
+$$
+
+and then evaluates
+
+$$
+\mathcal L=-\frac1m\sum_{i=1}^m
+\left[y_i\log \tilde p_i +(1-y_i)\log(1-\tilde p_i)\right].
+$$
+
+Its derivative with respect to the raw model probability is
+
+$$
+\frac{\partial\mathcal L}{\partial p_i}
+=
+\frac{1-2\varepsilon}{m}
+\frac{\tilde p_i-y_i}{\tilde p_i(1-\tilde p_i)}.
+$$
+
+The **unsmoothed** Bernoulli log loss is a strictly proper scoring rule. The finite-`epsilon` objective above is a deliberately stabilized approximation expressed through $\tilde p$, so strict propriety with respect to the raw $p$ should not be claimed. With the default $\varepsilon=10^{-9}$ the transformation is negligible for ordinary interior probabilities, but it still does not provide a calibration guarantee.
+
+## Why the two-term parameter-shift rule is valid here
+
+Each trainable scalar appears in exactly one $R_Y$ or $R_Z$ gate. These gates have Pauli generators with two distinct eigenvalues, so the standard two-evaluation parameter-shift rule is exact for the quantum expectation:
+
+$$
+\frac{\partial z}{\partial\theta_k}
+=
+\frac12\left[
+ z\left(\theta_k+\frac\pi2\right)
+-z\left(\theta_k-\frac\pi2\right)
+\right].
+$$
+
+Because
+
+$$
+p=\frac{1-z}{2},
+$$
+
+we have
+
+$$
+\frac{\partial p}{\partial\theta_k}
+=-\frac12\frac{\partial z}{\partial\theta_k}.
+$$
+
+The final BCE gradient is obtained with the ordinary chain rule:
+
+$$
+\frac{\partial\mathcal L}{\partial\theta_k}
+=
+\sum_i
+\frac{\partial\mathcal L}{\partial p_i}
+\frac{\partial p_i}{\partial\theta_k}.
+$$
+
+The repository does **not** apply a parameter-shift identity directly to the nonlinear BCE loss.
+
+More general parameterized gates, generators with more than two distinct eigenvalues, or one scalar reused across multiple gates can require decomposition, repeated chain-rule terms, or generalized parameter-shift rules.
+
+### Why use parameter-shift on a classical simulator?
+
+It is not the fastest classical differentiation method. Classical statevector simulators can use reverse-mode or adjoint-style derivatives more efficiently. This project keeps parameter-shift because it makes every gradient evaluation explicit and closely mirrors the circuit-evaluation procedure used on quantum devices.
+
+## Computational cost
+
+For $n$ qubits, exact statevector storage is $O(2^n)$. A one-qubit gate application is $O(2^n)$. A forward pass with $L$ layers and $n$ wires is therefore approximately
+
+$$
+O(Ln2^n).
+$$
+
+There are $P=3Ln$ trainable parameters. The implemented parameter-shift gradient requires two shifted expectation evaluations per parameter. For a batch of $B$ samples, the dominant training-gradient cost is therefore approximately
+
+$$
+O(BPLn2^n)=O(BL^2n^2 2^n).
+$$
+
+This implementation is intentionally transparent rather than optimized for large-qubit simulation.
+
+## Data re-uploading and what it does not imply
+
+Repeated encoding can enlarge the family of functions represented by a small circuit. The foundational data-reuploading work shows that repeated classical uploads are a powerful mechanism for quantum classifiers. However, universality or expressivity results for a particular theoretical construction do not automatically transfer to every modified ansatz. In particular, this repository uses fixed unit data-upload angles rather than trainable upload frequencies. Recent fixed-upload theory shows that universality can survive removal of upload-frequency tunability in specific QSP-style circuit families, with the lost flexibility transferred into additional depth, but that theorem is **not** a universality proof for this project-specific CNOT ansatz.
+
+Likewise, adding layers does not guarantee easier optimization or better test accuracy. Work on gradients and Fourier profiles of re-uploading models shows an expressivity-trainability tradeoff and identifies regimes with vanishing gradients or strongly suppressed high-frequency components. More recent work also gives settings in which deep encoding of high-dimensional data with too few qubits can degrade predictive performance. These results depend on their stated architectures and data assumptions, so they are cautions rather than automatic diagnoses of this two-feature toy model. In this repository, layer count should therefore be treated as a hyperparameter, not as a monotonic quality knob.
+
+## Built-in datasets
+
+The built-in generator returns raw two-dimensional features in $[-1,1)$ and angle features scaled by $\pi$.
+
+- `vertical`: decision boundary $x_0=0$
+- `horizontal`: decision boundary $x_1=0$
+- `linear`: score $x_0+x_1$
+- `circle`: radial boundary
+- `sine`: sinusoidal score
+
+Gaussian noise is added to the separating score before labels are formed.
+
+The train/test helper is deterministic for a fixed seed, but it is intentionally simple and **not stratified**. Small holdouts can therefore have unstable class proportions.
+
+The trainer evaluates the array named `X_test` at logged epochs. The optimizer never uses those values, but because the metrics are monitored during training, that split should be treated as a **validation/monitoring split** if it informs model or hyperparameter choices. For an unbiased final performance estimate, use a separate untouched test set. The `X_test` name is retained for API compatibility.
+
+## Configuration
+
+`configs/default.json` contains the complete built-in experiment configuration:
+
+| Key | Meaning |
+|---|---|
+| `seed` | RNG seed for data, split, initialization, and batch order |
+| `num_samples` | number of generated rows |
+| `test_size` | holdout fraction |
+| `dataset` | built-in decision-boundary family |
+| `noise` | Gaussian score noise |
+| `num_qubits` | simulated qubits |
+| `num_layers` | data-reuploading layers |
+| `num_features` | must be 2 for the built-in CLI dataset |
+| `observable_wire` | measured wire, or `null` for the model default |
+| `init_scale` | standard deviation of initial trainable angles |
+| `epochs` | optimization epochs |
+| `learning_rate` | Adam learning rate |
+| `batch_size` | `0` means full-batch |
+| `grad_clip` | elementwise gradient magnitude cap, `0` disables clipping |
+| `output_dir` | artifact directory |
+| `log_every` | metric logging interval |
+
+Unknown configuration keys are rejected so spelling mistakes do not silently change an experiment. JSON parsing is also strict: duplicate keys and non-standard `NaN`/`Infinity` constants are rejected instead of being silently accepted. Public numerical APIs likewise reject booleans, numeric strings, object arrays, and complex values where genuine real-valued inputs are required.
+
+## Saved artifacts
+
+A training run writes:
 
 ```text
 outputs/default_run/
@@ -146,125 +297,63 @@ outputs/default_run/
 └── decision_boundary.png
 ```
 
-- `config.json`: resolved training config for experiment provenance.
-- `trained_params.npy`: learned parameter tensor $\theta\in\mathbb{R}^{L\times n\times 3}$.
-- `metrics.csv`: epoch snapshots of train/test loss + accuracy + gradient norm.
-- `test_predictions.csv`: per-sample labels, predictions, probabilities.
-- `summary.json`: final metrics + confusion matrix.
+`config.json` contains five sections:
 
----
+- `experiment`: resolved experiment settings,
+- `model`: actual architecture and parameter count,
+- `training`: optimizer/training settings,
+- `data`: row counts and SHA-256 fingerprints for the exact arrays used by the most recent fit,
+- `runtime`: Python, NumPy, and platform versions.
 
-## Implementations
+Before writing artifacts, the trainer verifies that the supplied train/monitoring arrays, current model parameters, current architecture metadata, and in-memory training history still match the most recent `fit()` call. When `raw_test` is supplied, it must also be the exact unscaled feature matrix corresponding to `X_test = raw_test * pi`; this prevents predictions from being paired with unrelated raw rows. Saved data provenance marks the repeatedly inspected holdout explicitly as `monitoring_validation`. Managed plot files from an older run are removed before new artifacts are written, so a later `--no-plots` run cannot accidentally leave obsolete figures beside fresh parameters and metrics.
 
-### 1) State model
+The recorded seed makes the random choices reproducible within a compatible numerical environment. Exact bit-for-bit equality across arbitrary Python, NumPy, BLAS, and operating-system versions is not promised.
 
-For $n$ qubits, the model state is:
+## Notebook
 
-$|\psi\rangle = \sum_{k=0}^{2^n-1} a_k |k\rangle, \quad a_k\in\mathbb{C}, \quad \sum_k |a_k|^2=1$.
+`examples/qnn_walkthrough.ipynb` is stored without execution outputs. This avoids presenting one seed's result as a benchmark and keeps the notebook reproducible from the package code. The walkthrough intentionally uses a small 48-sample, 2-layer, 8-epoch configuration so the explicit parameter-shift implementation remains practical on an ordinary CPU. Its holdout is labeled as monitoring data because it is inspected during training.
 
-### Why this choice
+Install notebook support with:
 
-Statevectors provide exact amplitudes and exact expectation values, ideal for understanding algorithm behavior without shot noise confounds.
+```bash
+python -m pip install -e '.[notebook]'
+```
 
-### 2) Rotation gates
+## Scope and limitations
 
-$$ R_X(\theta) = e^{-i\theta X/2} = \begin{bmatrix} \cos\left(\frac{\theta}{2}\right) & -i\sin\left(\frac{\theta}{2}\right) \\ -i\sin\left(\frac{\theta}{2}\right) & \cos\left(\frac{\theta}{2}\right) \end{bmatrix} $$
+This repository currently has several deliberate limitations:
 
-$$ R_Y(\theta) = e^{-i\theta Y/2} = \begin{bmatrix} \cos\left(\frac{\theta}{2}\right) & -\sin\left(\frac{\theta}{2}\right) \\ \sin\left(\frac{\theta}{2}\right) & \cos\left(\frac{\theta}{2}\right) \end{bmatrix} $$
+- exact noiseless statevectors only,
+- no finite-shot measurement model,
+- no device or hardware noise,
+- no transpilation or hardware connectivity model,
+- binary classification only,
+- built-in CLI datasets have exactly two features,
+- exponential statevector memory,
+- computationally expensive parameter-shift training,
+- no claim of quantum advantage or classical benchmark superiority.
 
-$$ R_Z(\theta) = e^{-i\theta Z/2} = \begin{bmatrix} e^{-i\theta/2} & 0 \\ 0 & e^{i\theta/2} \end{bmatrix} $$
+These limits are explicit so that the code can be used as a correct educational reference rather than as a hardware-performance simulator.
 
-### Why these gates
+## Reproduce
 
-They are smooth, differentiable, physically meaningful, and sufficient for expressive parameterized single-qubit transformations.
+On a fresh environment:
 
-### 3) Ansatz
+```bash
+bash scripts/reproduce.sh
+```
 
-For each layer $\ell=1,\dots,L$ and qubit $q=0,\dots,n-1$:
+The script installs the development dependencies, runs the default training experiment, and runs the test suite.
 
-1. Data encoding: $R_X(x_{q\bmod d})$, then $R_Y(x_{(q+1)\bmod d})$.
-2. Trainable block: $R_Y(\theta_{\ell,q,0})$, then $R_Z(\theta_{\ell,q,1})$.
-3. Entanglement ring: CNOT chain wrapped cyclically.
-4. Post-entanglement: $R_Y(\theta_{\ell,q,2})$.
+## Research references
 
-### Why this structure
-
-Data re-uploading increases nonlinear feature interaction depth; entanglement enables cross-qubit correlation; repeated layers expand hypothesis space.
-
-### 4) Measurement and probability
-
-On observable wire $w$:
-
-$z(x;\theta)=\langle\psi(x;\theta)|Z_w|\psi(x;\theta)\rangle\in[-1,1]$
-
-$p(x;\theta)=\frac{1-z(x;\theta)}{2}\in[0,1]$
-
-$\hat y=\mathbf{1}[p\ge0.5]$
-
-### Why this mapping
-
-$\langle Z\rangle$ naturally lies in $[-1,1]$, so affine rescaling yields a valid Bernoulli probability for BCE training.
-
-### 5) Loss
-
-For samples $(x_i,y_i)$, $y_i\in\{0,1\}$:
-
-$\mathcal{L}(\theta)=-\frac{1}{m}\sum_{i=1}^m \left[y_i\log p_i + (1-y_i)\log(1-p_i)\right]$
-
-where $p_i=p(x_i;\theta)$.
-
-### Why BCE
-
-BCE corresponds to negative log-likelihood of Bernoulli outcomes and provides calibrated probabilistic supervision.
-
-### 6) Parameter-shift gradient
-
-For any trainable scalar parameter $\theta_k$:
-
-$\frac{\partial z_i}{\partial\theta_k}=\frac{1}{2}\left[z_i\left(\theta_k+\frac{\pi}{2}\right)-z_i\left(\theta_k-\frac{\pi}{2}\right)\right]$
-
-$\frac{\partial p_i}{\partial\theta_k}=-\frac{1}{2}\frac{\partial z_i}{\partial\theta_k}$
-
-$\frac{\partial\mathcal{L}}{\partial p_i}= -\frac{1}{m}\left(\frac{y_i}{p_i}-\frac{1-y_i}{1-p_i}\right)$
-
-$\frac{\partial\mathcal{L}}{\partial\theta_k}=\sum_{i=1}^{m}\frac{\partial\mathcal{L}}{\partial p_i}\frac{\partial p_i}{\partial\theta_k}$
-
-### Why parameter-shift
-
-It gives an exact analytic gradient for this gate family without finite-difference step-size bias.
-
-### 7) Optimizer
-
-With gradient $g_t=\nabla_\theta \mathcal{L}_t$:
-
-$m_t=\beta_1 m_{t-1}+(1-\beta_1)g_t$
-
-$v_t=\beta_2 v_{t-1}+(1-\beta_2)g_t^2$
-
-$\hat m_t=\frac{m_t}{1-\beta_1^t},\quad \hat v_t=\frac{v_t}{1-\beta_2^t}$
-
-$\theta_t=\theta_{t-1}-\alpha\frac{\hat m_t}{\sqrt{\hat v_t}+\epsilon}$
-
-### Why Adam
-
-Adaptive moments reduce sensitivity to raw gradient scale and usually stabilize optimization in non-convex variational landscapes.
-
----
-
-## Reproducibility
-
-Determinism comes from seeded RNG in dataset generation, split shuffling, parameter initialization, and epoch-level batching order.
-
----
-
-## Troubleshooting
-
-- **Parameter shape error on `predict`**: architecture flags must match trained tensor shape.
-- **Training is slow**: expected with $O(2^n)$ state simulation and repeated parameter-shift passes.
-- **Weak accuracy**: reduce dataset noise, increase epochs, tune learning rate, or adjust depth $L$.
-
----
+1. A. Pérez-Salinas, A. Cervera-Lierta, E. Gil-Fuster, and J. I. Latorre, **Data re-uploading for a universal quantum classifier**, *Quantum* 4, 226 (2020), arXiv:1907.02085.
+2. G. E. Crooks, **Gradients of parameterized quantum gates using the parameter-shift rule and gate decomposition**, arXiv:1905.13311 (2019).
+3. D. Wierichs, J. Izaac, C. Wang, and C. Yen-Yu Lin, **General parameter-shift rules for quantum gradients**, *Quantum* 6, 677 (2022), arXiv:2107.12390.
+4. A. Barthe and A. Pérez-Salinas, **Gradients and frequency profiles of quantum re-uploading models**, *Quantum* 8, 1523 (2024), arXiv:2311.10822.
+5. X. Wang, H.-X. Tao, and R.-B. Wu, **Predictive Performance of Deep Quantum Data Re-uploading Models**, *Proceedings of the 42nd International Conference on Machine Learning*, PMLR 267 (2025), arXiv:2505.20337.
+6. A. Y. Liu and L. Pira, **The Cost of Removing Tunability in Quantum Data Re-Uploading**, arXiv:2606.25598 (2026).
 
 ## License
 
-MIT License. See [LICENSE](./LICENSE).
+MIT. See `LICENSE`.
