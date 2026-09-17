@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "qnn-from-scratch"
 version = "0.1.0"
-description = "An educational Quantum Neural Network implemented from scratch with NumPy."
+description = "An educational data-reuploading quantum neural network with a NumPy statevector core."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -18,10 +18,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
-    "pre-commit>=3.8.0",
-    "isort>=5.13.0",
-    "black>=24.8.0",
-    "mypy>=1.11.0"
+    "pre-commit==4.6.1",
+    "isort==8.0.1",
+    "black==26.5.1",
+    "mypy==2.3.0"
+]
+notebook = [
+    "jupyterlab>=4.0",
+    "ipykernel>=6.0"
 ]
 
 [project.scripts]
@@ -34,7 +38,6 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 
-
 [tool.isort]
 profile = "black"
 line_length = 100
@@ -42,12 +45,12 @@ src_paths = ["src", "tests", "examples"]
 
 [tool.black]
 line-length = 100
-target-version = ["py312"]
+target-version = ["py310"]
 include = '\.pyi?$'
 extend-exclude = '(\.venv|build|dist)/'
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false

@@ -1,10 +1,6 @@
-"""Quantum Neural Network from scratch.
+"""Transparent NumPy implementation of a small data-reuploading QNN."""
 
-This package intentionally avoids quantum SDK dependencies. It provides a
-small but production-structured statevector simulator, a data-reuploading QNN,
-parameter-shift gradients, optimizers, metrics, plotting, tests, and a CLI.
-"""
-
+from qnn.config import ExperimentConfig
 from qnn.datasets import make_classification_dataset, train_test_split
 from qnn.metrics import accuracy_score, binary_cross_entropy
 from qnn.qnn import DataReuploadingQNN
@@ -12,6 +8,7 @@ from qnn.trainer import Trainer, TrainingConfig
 
 __all__ = [
     "DataReuploadingQNN",
+    "ExperimentConfig",
     "Trainer",
     "TrainingConfig",
     "accuracy_score",

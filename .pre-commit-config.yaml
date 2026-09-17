@@ -1,4 +1,4 @@
-minimum_pre_commit_version: "3.7.1"
+minimum_pre_commit_version: "4.6.1"
 default_install_hook_types: [pre-commit, pre-push]
 default_stages: [pre-commit]
 fail_fast: false
@@ -12,23 +12,21 @@ repos:
       - id: check-toml
       - id: end-of-file-fixer
       - id: trailing-whitespace
-      - id: mixed-line-ending
-        args: ["--fix=lf"]
 
   - repo: https://github.com/PyCQA/isort
-    rev: 9.0.0a3
+    rev: 8.0.1
     hooks:
       - id: isort
         args: ["--profile", "black", "--filter-files"]
 
-  - repo: https://github.com/psf/black
-    rev: 26.3.1
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 26.5.1
     hooks:
       - id: black
       - id: black-jupyter
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.20.2
+    rev: v2.3.0
     hooks:
       - id: mypy
         additional_dependencies:

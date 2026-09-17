@@ -1,8 +1,7 @@
-name: Tests (macOS)
+name: Tests (macos)
 
 on:
   push:
-    branches: ["**"]
   pull_request:
 
 jobs:
@@ -13,13 +12,15 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev]
+          python -m pip install -e '.[dev]'
+      - name: Compile source
+        run: python -m compileall -q src tests examples
       - name: Run tests
-        run: pytest -q
+        run: python -m pytest -q

@@ -1,10 +1,12 @@
-"""Deterministic toy datasets for QNN experiments."""
+"""Deterministic two-dimensional toy datasets for QNN experiments."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 import numpy as np
+
+from qnn._validation import integer_scalar, real_numeric_array, real_scalar
 
 
 @dataclass(frozen=True)
@@ -25,43 +27,38 @@ def make_classification_dataset(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Create a deterministic two-feature binary classification dataset.
 
-    Args:
-        num_samples: Number of rows to generate. Must be at least ``8``.
-        seed: Random seed used for deterministic generation.
-        kind: Decision-boundary family. One of ``linear``, ``vertical``,
-            ``horizontal``, ``circle``, or ``sine``.
-        noise: Standard deviation of Gaussian noise injected into the
-            separating score.
-
-    Returns:
-        A tuple ``(X_angles, y, raw)`` where:
-        - ``X_angles``: feature matrix scaled by ``pi`` for rotation gates.
-        - ``y``: binary labels in ``{0, 1}``.
-        - ``raw``: original features in approximately ``[-1, 1]``.
-
-    Raises:
-        ValueError: If ``num_samples < 8`` or ``kind`` is unsupported.
+    ``vertical`` denotes the vertical boundary ``x0 = 0`` and therefore labels
+    by the sign of ``x0``. ``horizontal`` denotes ``x1 = 0`` and labels by the
+    sign of ``x1``. Gaussian noise is added to the separating score before the
+    binary label is formed.
     """
-    if num_samples < 8:
-        raise ValueError("num_samples must be at least 8")
+    num_samples = integer_scalar("num_samples", num_samples, minimum=8)
+    seed = integer_scalar("seed", seed, minimum=0)
+    if not isinstance(kind, str):
+        raise TypeError("kind must be a string")
+    noise = real_scalar("noise", noise)
+    if noise < 0.0:
+        raise ValueError("noise must be a finite non-negative value")
+
     rng = np.random.default_rng(seed)
     raw = rng.uniform(-1.0, 1.0, size=(num_samples, 2))
+    jitter = rng.normal(0.0, noise, size=num_samples)
 
     if kind == "linear":
-        score = raw[:, 0] + raw[:, 1] + rng.normal(0.0, noise, size=num_samples)
+        score = raw[:, 0] + raw[:, 1] + jitter
         y = (score > 0.0).astype(np.int64)
     elif kind == "vertical":
-        score = raw[:, 1] + rng.normal(0.0, noise, size=num_samples)
+        score = raw[:, 0] + jitter
         y = (score > 0.0).astype(np.int64)
     elif kind == "horizontal":
-        score = raw[:, 0] + rng.normal(0.0, noise, size=num_samples)
+        score = raw[:, 1] + jitter
         y = (score > 0.0).astype(np.int64)
     elif kind == "circle":
         radius = np.sqrt(raw[:, 0] ** 2 + raw[:, 1] ** 2)
-        y = (radius > 0.68 + rng.normal(0.0, noise, size=num_samples)).astype(np.int64)
+        score = radius - 0.68 + jitter
+        y = (score > 0.0).astype(np.int64)
     elif kind == "sine":
-        score = np.sin(np.pi * raw[:, 0]) + np.cos(np.pi * raw[:, 1])
-        score += rng.normal(0.0, noise, size=num_samples)
+        score = np.sin(np.pi * raw[:, 0]) + np.cos(np.pi * raw[:, 1]) + jitter
         y = (score > 0.0).astype(np.int64)
     else:
         raise ValueError("kind must be one of: linear, vertical, horizontal, circle, sine")
@@ -78,35 +75,42 @@ def train_test_split(
     seed: int = 7,
     shuffle: bool = True,
 ) -> DatasetBundle:
-    """Split aligned feature/label arrays into train and test partitions.
+    """Split aligned arrays into non-empty train and test partitions.
 
-    Args:
-        X: Angle-encoded features, shape ``(n_samples, n_features)``.
-        y: Binary labels, shape ``(n_samples,)``.
-        raw: Unscaled raw features aligned with ``X``.
-        test_size: Fraction of rows to allocate to the test split.
-        seed: Random seed used when ``shuffle`` is enabled.
-        shuffle: Whether to shuffle rows before splitting.
-
-    Returns:
-        A :class:`DatasetBundle` containing train/test slices for all arrays.
-
-    Raises:
-        ValueError: If ``test_size`` is outside ``(0, 1)`` or input lengths
-            are inconsistent.
+    This helper is intentionally simple and does not perform stratification.
     """
+    test_size = real_scalar("test_size", test_size)
     if not 0.0 < test_size < 1.0:
-        raise ValueError("test_size must be between 0 and 1")
+        raise ValueError("test_size must be a finite value between 0 and 1")
+    seed = integer_scalar("seed", seed, minimum=0)
+    if not isinstance(shuffle, (bool, np.bool_)):
+        raise TypeError("shuffle must be boolean")
+
+    X = real_numeric_array("X", X)
+    y = real_numeric_array("y", y)
+    raw = real_numeric_array("raw", raw)
+    if X.ndim != 2:
+        raise ValueError(f"X must be 2-D, got shape {X.shape}")
+    if raw.ndim != 2:
+        raise ValueError(f"raw must be 2-D, got shape {raw.shape}")
+    if y.ndim != 1:
+        raise ValueError(f"y must be 1-D, got shape {y.shape}")
+    if not np.all(np.isfinite(X)) or not np.all(np.isfinite(raw)) or not np.all(np.isfinite(y)):
+        raise ValueError("X, y, and raw must contain only finite values")
+
     n = len(X)
+    if n < 2:
+        raise ValueError("at least two samples are required for a train/test split")
     if not (len(y) == n and len(raw) == n):
         raise ValueError("X, y, and raw must have the same first dimension")
 
     indices = np.arange(n)
-    if shuffle:
+    if bool(shuffle):
         rng = np.random.default_rng(seed)
         rng.shuffle(indices)
 
-    n_test = max(1, int(round(n * test_size)))
+    n_test = int(round(n * test_size))
+    n_test = min(n - 1, max(1, n_test))
     test_idx = indices[:n_test]
     train_idx = indices[n_test:]
 
