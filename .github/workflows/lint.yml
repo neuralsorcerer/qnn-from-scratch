@@ -27,6 +27,6 @@ jobs:
       - name: Black
         run: black --check .
       - name: Isort
-        run: isort --check-only .
+        run: isort --diff --check-only .
       - name: Mypy
         run: mypy
