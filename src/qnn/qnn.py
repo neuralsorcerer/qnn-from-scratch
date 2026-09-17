@@ -114,19 +114,13 @@ class DataReuploadingQNN:
                 state = self.sim.apply_one_qubit_gate(state, ry(second_feature), wire)
 
             for wire in range(self.num_qubits):
-                state = self.sim.apply_one_qubit_gate(
-                    state, ry(params[layer, wire, 0]), wire
-                )
-                state = self.sim.apply_one_qubit_gate(
-                    state, rz(params[layer, wire, 1]), wire
-                )
+                state = self.sim.apply_one_qubit_gate(state, ry(params[layer, wire, 0]), wire)
+                state = self.sim.apply_one_qubit_gate(state, rz(params[layer, wire, 1]), wire)
 
             state = self.sim.apply_ring_entanglement(state)
 
             for wire in range(self.num_qubits):
-                state = self.sim.apply_one_qubit_gate(
-                    state, ry(params[layer, wire, 2]), wire
-                )
+                state = self.sim.apply_one_qubit_gate(state, ry(params[layer, wire, 2]), wire)
 
         # All applied matrices are checked unitary, so normalization is preserved.
         self.sim.probabilities(state)
