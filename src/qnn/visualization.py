@@ -4,12 +4,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+from matplotlib.figure import Figure
 
 from qnn._validation import real_array
 from qnn.qnn import DataReuploadingQNN
 from qnn.trainer import TrainingRecord
+
+
+def _new_agg_figure(figsize: tuple[float, float]) -> Figure:
+    """Create a figure backed explicitly by Agg for headless file rendering."""
+    figure = Figure(figsize=figsize)
+    FigureCanvasAgg(figure)
+    return figure
 
 
 def plot_training_history(history: list[TrainingRecord], output_dir: str | Path) -> Path:
@@ -33,29 +41,29 @@ def plot_training_history(history: list[TrainingRecord], output_dir: str | Path)
     out.mkdir(parents=True, exist_ok=True)
 
     loss_path = out / "loss_curve.png"
-    plt.figure(figsize=(7, 4.5))
-    plt.plot(epochs, [r.train_loss for r in history], marker="o", label="train")
-    plt.plot(epochs, [r.test_loss for r in history], marker="o", label="test")
-    plt.xlabel("Epoch")
-    plt.ylabel("Binary cross entropy")
-    plt.title("QNN training loss")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(loss_path, dpi=160)
-    plt.close()
+    loss_figure = _new_agg_figure((7.0, 4.5))
+    loss_ax = loss_figure.subplots()
+    loss_ax.plot(epochs, [r.train_loss for r in history], marker="o", label="train")
+    loss_ax.plot(epochs, [r.test_loss for r in history], marker="o", label="test")
+    loss_ax.set_xlabel("Epoch")
+    loss_ax.set_ylabel("Binary cross entropy")
+    loss_ax.set_title("QNN training loss")
+    loss_ax.legend()
+    loss_figure.tight_layout()
+    loss_figure.savefig(loss_path, dpi=160)
 
     acc_path = out / "accuracy_curve.png"
-    plt.figure(figsize=(7, 4.5))
-    plt.plot(epochs, [r.train_accuracy for r in history], marker="o", label="train")
-    plt.plot(epochs, [r.test_accuracy for r in history], marker="o", label="test")
-    plt.xlabel("Epoch")
-    plt.ylabel("Accuracy")
-    plt.ylim(0.0, 1.05)
-    plt.title("QNN classification accuracy")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(acc_path, dpi=160)
-    plt.close()
+    acc_figure = _new_agg_figure((7.0, 4.5))
+    acc_ax = acc_figure.subplots()
+    acc_ax.plot(epochs, [r.train_accuracy for r in history], marker="o", label="train")
+    acc_ax.plot(epochs, [r.test_accuracy for r in history], marker="o", label="test")
+    acc_ax.set_xlabel("Epoch")
+    acc_ax.set_ylabel("Accuracy")
+    acc_ax.set_ylim(0.0, 1.05)
+    acc_ax.set_title("QNN classification accuracy")
+    acc_ax.legend()
+    acc_figure.tight_layout()
+    acc_figure.savefig(acc_path, dpi=160)
     return out
 
 
@@ -90,14 +98,14 @@ def plot_decision_boundary(
     grid = np.array([[a, b] for b in ys for a in xs], dtype=np.float64)
     proba = model.predict_proba(grid * np.pi).reshape(len(ys), len(xs))
 
-    plt.figure(figsize=(6, 5))
-    plt.contourf(xs, ys, proba, levels=20, alpha=0.8)
-    plt.colorbar(label="p(class=1)")
-    plt.scatter(raw[:, 0], raw[:, 1], c=y, edgecolors="k", s=35)
-    plt.xlabel("raw x0")
-    plt.ylabel("raw x1")
-    plt.title("QNN decision boundary")
-    plt.tight_layout()
-    plt.savefig(boundary_path, dpi=160)
-    plt.close()
+    figure = _new_agg_figure((6.0, 5.0))
+    ax = figure.subplots()
+    contour = ax.contourf(xs, ys, proba, levels=20, alpha=0.8)
+    figure.colorbar(contour, ax=ax, label="p(class=1)")
+    ax.scatter(raw[:, 0], raw[:, 1], c=y, edgecolors="k", s=35)
+    ax.set_xlabel("raw x0")
+    ax.set_ylabel("raw x1")
+    ax.set_title("QNN decision boundary")
+    figure.tight_layout()
+    figure.savefig(boundary_path, dpi=160)
     return boundary_path
