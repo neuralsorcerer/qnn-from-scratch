@@ -185,8 +185,7 @@ def predict_command(args: argparse.Namespace) -> int:
     params = np.asarray(loaded, dtype=np.float64)
     if params.ndim != 3 or params.shape[2] != 3:
         raise ValueError(
-            "parameter tensor must have shape (num_layers, num_qubits, 3); "
-            f"got {params.shape}"
+            "parameter tensor must have shape (num_layers, num_qubits, 3); " f"got {params.shape}"
         )
     inferred_layers, inferred_qubits, _ = params.shape
     if inferred_layers < 1 or inferred_qubits < 1:
