@@ -203,6 +203,7 @@ class Trainer:
             json.dumps(experiment, allow_nan=False)
         except (TypeError, ValueError) as exc:
             raise TypeError("experiment_config must contain JSON-serializable values") from exc
+        self._validate_experiment_config(experiment, len(X_train), len(X_test))
 
         out = Path(self.config.output_dir)
         out.mkdir(parents=True, exist_ok=True)
@@ -325,6 +326,76 @@ class Trainer:
                 getattr(final, field), getattr(recorded, field), atol=1e-12, rtol=1e-12
             ):
                 raise ValueError("training history does not match the current model and data")
+
+    def _validate_experiment_config(
+        self,
+        experiment: dict[str, Any],
+        train_rows: int,
+        monitor_rows: int,
+    ) -> None:
+        """Reject experiment metadata that contradicts the realized run."""
+        architecture = self.model.architecture()
+        integer_expectations = {
+            "num_qubits": int(architecture["num_qubits"]),
+            "num_layers": int(architecture["num_layers"]),
+            "num_features": int(architecture["num_features"]),
+            "epochs": self.config.epochs,
+            "batch_size": self.config.batch_size,
+            "log_every": self.config.log_every,
+            "num_samples": train_rows + monitor_rows,
+        }
+        for key, expected in integer_expectations.items():
+            if key not in experiment:
+                continue
+            actual = integer_scalar(f"experiment_config[{key!r}]", experiment[key])
+            if actual != expected:
+                raise ValueError(
+                    f"experiment_config field {key!r}={actual} contradicts realized value {expected}"
+                )
+
+        float_expectations = {
+            "init_scale": float(architecture["init_scale"]),
+            "learning_rate": self.config.learning_rate,
+            "grad_clip": self.config.grad_clip,
+        }
+        for key, expected in float_expectations.items():
+            if key not in experiment:
+                continue
+            actual = real_scalar(f"experiment_config[{key!r}]", experiment[key])
+            if actual != expected:
+                raise ValueError(
+                    f"experiment_config field {key!r}={actual} contradicts realized value {expected}"
+                )
+
+        if "observable_wire" in experiment and experiment["observable_wire"] is not None:
+            actual_wire = integer_scalar(
+                "experiment_config['observable_wire']", experiment["observable_wire"], minimum=0
+            )
+            expected_wire = int(architecture["observable_wire"])
+            if actual_wire != expected_wire:
+                raise ValueError(
+                    "experiment_config field 'observable_wire' contradicts the realized model"
+                )
+
+        if "output_dir" in experiment:
+            output_dir = experiment["output_dir"]
+            if not isinstance(output_dir, str):
+                raise TypeError("experiment_config['output_dir'] must be a string")
+            if output_dir.strip() != self.config.output_dir:
+                raise ValueError(
+                    "experiment_config field 'output_dir' contradicts the training configuration"
+                )
+
+        if "test_size" in experiment:
+            test_size = real_scalar("experiment_config['test_size']", experiment["test_size"])
+            if not 0.0 < test_size < 1.0:
+                raise ValueError("experiment_config['test_size'] must lie in (0, 1)")
+            total_rows = train_rows + monitor_rows
+            expected_monitor_rows = min(total_rows - 1, max(1, int(round(total_rows * test_size))))
+            if monitor_rows != expected_monitor_rows:
+                raise ValueError(
+                    "experiment_config field 'test_size' contradicts the realized split row counts"
+                )
 
     @staticmethod
     def _history_digest(history: list[TrainingRecord]) -> str:
