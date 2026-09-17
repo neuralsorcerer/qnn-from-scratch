@@ -271,3 +271,32 @@ def test_save_artifacts_rejects_architecture_mutation_after_fit(tmp_path: Path):
     trainer.model.init_scale += 0.1
     with pytest.raises(ValueError, match="architecture changed after fit"):
         trainer.save_artifacts(split.X_train, split.y_train, split.X_test, split.y_test)
+
+
+def test_save_artifacts_rejects_contradictory_experiment_metadata(tmp_path: Path):
+    split = _small_problem(seed=16)
+    out = tmp_path / "out"
+    trainer = Trainer(
+        DataReuploadingQNN(num_layers=1, seed=16),
+        TrainingConfig(epochs=1, output_dir=str(out), log_every=1),
+    )
+    trainer.fit(split.X_train, split.y_train, split.X_test, split.y_test)
+
+    bad_configs = [
+        ({"num_layers": 99}, "num_layers"),
+        ({"epochs": 2}, "epochs"),
+        ({"num_samples": 25}, "num_samples"),
+        ({"test_size": 0.5}, "test_size"),
+        ({"output_dir": str(tmp_path / "wrong")}, "output_dir"),
+    ]
+    for experiment_config, field in bad_configs:
+        with pytest.raises(ValueError, match=field):
+            trainer.save_artifacts(
+                split.X_train,
+                split.y_train,
+                split.X_test,
+                split.y_test,
+                experiment_config=experiment_config,
+            )
+
+    assert not out.exists()
