@@ -92,8 +92,6 @@ class Trainer:
         X_train, y_train = self._validate_supervised_data(X_train, y_train, "train")
         X_test, y_test = self._validate_supervised_data(X_test, y_test, "test")
 
-        # A fresh fit call starts fresh Adam moments and fresh logging. Model
-        # parameters themselves are intentionally not reinitialized.
         self.optimizer = Adam(learning_rate=self.config.learning_rate)
         self.history = []
         self._fit_fingerprints = None
@@ -281,7 +279,6 @@ class Trainer:
         y = real_array(f"y_{name}", y).reshape(-1)
         if len(y) != len(X):
             raise ValueError(f"X_{name} and y_{name} must have matching row counts")
-        # Reuse metric validation for finiteness and binary labels.
         accuracy_score(np.full(len(y), 0.5, dtype=np.float64), y)
         return X, y
 
@@ -347,10 +344,11 @@ class Trainer:
         for key, expected in integer_expectations.items():
             if key not in experiment:
                 continue
-            actual = integer_scalar(f"experiment_config[{key!r}]", experiment[key])
-            if actual != expected:
+            actual_int = integer_scalar(f"experiment_config[{key!r}]", experiment[key])
+            if actual_int != expected:
                 raise ValueError(
-                    f"experiment_config field {key!r}={actual} contradicts realized value {expected}"
+                    f"experiment_config field {key!r}={actual_int} "
+                    f"contradicts realized value {expected}"
                 )
 
         float_expectations = {
@@ -361,10 +359,11 @@ class Trainer:
         for key, expected in float_expectations.items():
             if key not in experiment:
                 continue
-            actual = real_scalar(f"experiment_config[{key!r}]", experiment[key])
-            if actual != expected:
+            actual_float = real_scalar(f"experiment_config[{key!r}]", experiment[key])
+            if actual_float != expected:
                 raise ValueError(
-                    f"experiment_config field {key!r}={actual} contradicts realized value {expected}"
+                    f"experiment_config field {key!r}={actual_float} "
+                    f"contradicts realized value {expected}"
                 )
 
         if "observable_wire" in experiment and experiment["observable_wire"] is not None:
@@ -391,7 +390,10 @@ class Trainer:
             if not 0.0 < test_size < 1.0:
                 raise ValueError("experiment_config['test_size'] must lie in (0, 1)")
             total_rows = train_rows + monitor_rows
-            expected_monitor_rows = min(total_rows - 1, max(1, int(round(total_rows * test_size))))
+            expected_monitor_rows = min(
+                total_rows - 1,
+                max(1, int(round(total_rows * test_size))),
+            )
             if monitor_rows != expected_monitor_rows:
                 raise ValueError(
                     "experiment_config field 'test_size' contradicts the realized split row counts"
