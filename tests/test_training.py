@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -101,12 +102,12 @@ def test_training_config_rejects_invalid_values():
 
 def test_training_config_normalizes_numpy_scalars_for_json(tmp_path: Path):
     cfg = TrainingConfig(
-        seed=np.int64(2),
-        epochs=np.int64(1),
+        seed=np.int64(2),  # type: ignore[arg-type]
+        epochs=np.int64(1),  # type: ignore[arg-type]
         learning_rate=np.float64(0.05),
-        batch_size=np.int64(0),
+        batch_size=np.int64(0),  # type: ignore[arg-type]
         grad_clip=np.float64(2.0),
-        log_every=np.int64(1),
+        log_every=np.int64(1),  # type: ignore[arg-type]
         output_dir=f"  {tmp_path}  ",
     )
     assert type(cfg.seed) is int
@@ -282,7 +283,7 @@ def test_save_artifacts_rejects_contradictory_experiment_metadata(tmp_path: Path
     )
     trainer.fit(split.X_train, split.y_train, split.X_test, split.y_test)
 
-    bad_configs = [
+    bad_configs: list[tuple[dict[str, Any], str]] = [
         ({"num_layers": 99}, "num_layers"),
         ({"epochs": 2}, "epochs"),
         ({"num_samples": 25}, "num_samples"),
