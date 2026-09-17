@@ -54,7 +54,7 @@ class DataReuploadingQNN:
             self.observable_wire = integer_scalar(
                 "observable_wire", self.observable_wire, minimum=0
             )
-        if not 0 <= self.observable_wire < self.num_qubits:
+        if not 0 <= self._measured_wire() < self.num_qubits:
             raise ValueError("observable_wire must be a valid qubit index")
 
         self.sim = StateVectorSimulator(self.num_qubits)
@@ -74,7 +74,7 @@ class DataReuploadingQNN:
             "num_qubits": self.num_qubits,
             "num_layers": self.num_layers,
             "num_features": self.num_features,
-            "observable_wire": int(self.observable_wire),
+            "observable_wire": self._measured_wire(),
             "init_scale": self.init_scale,
             "parameter_count": self.parameter_count,
         }
@@ -129,7 +129,7 @@ class DataReuploadingQNN:
     def expectation(self, x: np.ndarray, params: np.ndarray | None = None) -> float:
         """Return ``<Z>`` on the configured observable wire."""
         state = self.forward_state(x, params=params)
-        return self.sim.expectation_z(state, int(self.observable_wire))
+        return self.sim.expectation_z(state, self._measured_wire())
 
     def expectations(self, X: np.ndarray, params: np.ndarray | None = None) -> np.ndarray:
         """Return ``<Z>`` for each row of ``X``."""
@@ -212,3 +212,9 @@ class DataReuploadingQNN:
             raise ValueError(f"Expected params shape {expected}, got {params.shape}")
         if not np.all(np.isfinite(params)):
             raise ValueError("params must contain only finite values")
+
+    def _measured_wire(self) -> int:
+        wire = self.observable_wire
+        if wire is None:
+            raise RuntimeError("observable_wire has not been initialized")
+        return wire
