@@ -37,9 +37,7 @@ def test_predict_rejects_architecture_assertion_mismatch(tmp_path: Path):
     path = tmp_path / "p.npy"
     np.save(path, model.params, allow_pickle=False)
     with pytest.raises(SystemExit):
-        main([
-            "predict", "--params", str(path), "--x0", "0", "--x1", "0", "--num-layers", "2"
-        ])
+        main(["predict", "--params", str(path), "--x0", "0", "--x1", "0", "--num-layers", "2"])
 
 
 def test_train_rejects_unknown_config_key(tmp_path: Path):
@@ -113,9 +111,7 @@ def test_predict_rejects_wrong_saved_parameter_count(tmp_path: Path):
     np.save(params_path, model.params)
     metadata = model.architecture()
     metadata["parameter_count"] = metadata["parameter_count"] + 1
-    (tmp_path / "config.json").write_text(
-        json.dumps({"model": metadata}), encoding="utf-8"
-    )
+    (tmp_path / "config.json").write_text(json.dumps({"model": metadata}), encoding="utf-8")
     with pytest.raises(SystemExit):
         main(["predict", "--params", str(params_path), "--x0", "0.1", "--x1", "0.2"])
 
