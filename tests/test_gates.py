@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from qnn.gates import H, I2, X, Y, Z, rx, ry, rz
+from qnn.gates import I2, H, X, Y, Z, rx, ry, rz
 
 
 @pytest.mark.parametrize("gate_fn", [rx, ry, rz])
