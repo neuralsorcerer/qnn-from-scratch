@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from qnn.optim import Adam, SGD
+from qnn.optim import SGD, Adam
 
 
 def test_sgd_step():
