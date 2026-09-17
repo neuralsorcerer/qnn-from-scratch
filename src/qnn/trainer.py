@@ -192,9 +192,7 @@ class Trainer:
                 )
             if not np.all(np.isfinite(validated_raw_test)):
                 raise ValueError("raw_test must contain only finite values")
-            if not np.allclose(
-                validated_raw_test * np.pi, X_test, atol=1e-12, rtol=1e-12
-            ):
+            if not np.allclose(validated_raw_test * np.pi, X_test, atol=1e-12, rtol=1e-12):
                 raise ValueError(
                     "raw_test must be the unscaled feature matrix corresponding to X_test "
                     "(X_test = raw_test * pi)"
