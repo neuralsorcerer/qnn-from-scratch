@@ -341,14 +341,14 @@ class Trainer:
             "log_every": self.config.log_every,
             "num_samples": train_rows + monitor_rows,
         }
-        for key, expected in integer_expectations.items():
+        for key, expected_int in integer_expectations.items():
             if key not in experiment:
                 continue
             actual_int = integer_scalar(f"experiment_config[{key!r}]", experiment[key])
-            if actual_int != expected:
+            if actual_int != expected_int:
                 raise ValueError(
                     f"experiment_config field {key!r}={actual_int} "
-                    f"contradicts realized value {expected}"
+                    f"contradicts realized value {expected_int}"
                 )
 
         float_expectations = {
@@ -356,14 +356,14 @@ class Trainer:
             "learning_rate": self.config.learning_rate,
             "grad_clip": self.config.grad_clip,
         }
-        for key, expected in float_expectations.items():
+        for key, expected_float in float_expectations.items():
             if key not in experiment:
                 continue
             actual_float = real_scalar(f"experiment_config[{key!r}]", experiment[key])
-            if actual_float != expected:
+            if actual_float != expected_float:
                 raise ValueError(
                     f"experiment_config field {key!r}={actual_float} "
-                    f"contradicts realized value {expected}"
+                    f"contradicts realized value {expected_float}"
                 )
 
         if "observable_wire" in experiment and experiment["observable_wire"] is not None:
